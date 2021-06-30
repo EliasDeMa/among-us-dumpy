@@ -15,13 +15,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let ty: u32 = args[1].parse()?;
     let file = &args[2];
+    let out = &args[3];
     let bg = Reader::open("dumpy/black.png")?.decode()?;
     let input = Reader::open(file)?.decode()?;
 
     let txd = input.width() as f64 / input.height() as f64;
     let tx = (ty as f64 * txd * 0.862).round() as u32;
 
-    let img = resize(&input, tx, ty, FilterType::Gaussian);
+    let img = resize(&input, tx, ty, FilterType::CatmullRom);
 
     let pad = 10;
     let ix = (tx * 74) + (pad * 2);
@@ -30,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let frames = (0..6)
         .into_par_iter()
         .map(|index| {
-            let mut frame = bg.resize_exact(ix, iy, FilterType::Gaussian);
+            let mut frame = bg.resize_exact(ix, iy, FilterType::Nearest);
             let mut count = index;
             let mut count2 = index;
 
@@ -72,7 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .collect::<Vec<_>>();
 
-    let file_out = File::create("out.gif")?;
+    let file_out = File::create(out)?;
     let mut encoder = GifEncoder::new_with_speed(file_out, 30);
     encoder.set_repeat(Repeat::Infinite)?;
     encoder.encode_frames(frames)?;
