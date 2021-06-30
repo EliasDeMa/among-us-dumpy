@@ -1,12 +1,13 @@
 use std::{error::Error, fs::File};
 
-use image::{DynamicImage, Frame, GenericImageView, ImageBuffer, Pixel, Primitive, Rgb, RgbImage, Rgba, RgbaImage, gif::{GifEncoder, Repeat}, imageops::{FilterType, overlay, resize}, io::Reader};
+use image::{DynamicImage, Frame, GenericImageView, Pixel, Primitive, Rgb, RgbImage, gif::{GifEncoder, Repeat}, imageops::{FilterType, overlay, resize}, io::Reader};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 const C: Rgb<u8> = Rgb([197, 17, 17]);
 const C2: Rgb<u8> = Rgb([122, 8, 56]);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let ty = 9;
+    let ty = 31;
     let bg = Reader::open("dumpy/black.png")?.decode()?;
 
     let input = Reader::open("dumpy/xd.png")?.decode()?;
@@ -15,50 +16,49 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tx = (ty as f64 * txd * 0.862).round() as u32;
 
     let img = resize(&input, tx, ty, FilterType::Gaussian);
-    let mut frames: Vec<DynamicImage> = Vec::with_capacity(6);
 
     let pad = 10;
     let ix = (tx * 74) + (pad * 2);
-    let iy = (tx * 63) + (pad * 2);
+    let iy = (ty * 63) + (pad * 2);
 
-    for index in 0..6 {
-        let mut frame = bg.resize(ix, iy, FilterType::Gaussian);
-        let mut count = index;
-        let mut count2 = index;
+    let frames = (0..6)
+        .into_par_iter()
+        .map(|index| {
+            let mut frame = bg.resize_exact(ix, iy, FilterType::Gaussian);
+            let mut count = index;
+            let mut count2 = index;
 
-        for y in 0..ty {
-            for x in 0..tx {
-                let pixel_i = Reader::open(format!("dumpy/{}.png", count))?.decode()?;
-                let pixel = shader(pixel_i, img.get_pixel(x, y).to_rgb());
-                overlay(&mut frame, &pixel, (x * 74) + pad, (y * 63) + pad);
+            for y in 0..ty {
+                for x in 0..tx {
+                    let pixel_i = Reader::open(format!("dumpy/{}.png", count)).unwrap().decode().unwrap();
+                    let pixel = shader(pixel_i, img.get_pixel(x, y).to_rgb());
+                    overlay(&mut frame, &pixel, (x * 74) + pad, (y * 63) + pad);
 
-                count += 1;
-                if count == 6 {
-                    count = 0;
+                    count += 1;
+                    if count == 6 {
+                        count = 0;
+                    }
                 }
+
+                count2 -= 1;
+                if count2 == -1 {
+                    count2 = 5;
+                }
+                count = count2;
             }
 
-            count2 -= 1;
-            if count2 == -1 {
-                count2 = 5;
-            }
-            count = count2;
-        }
+            let set_bg_colour = ImageShader::new(ColourMapper::new(Rgb([255, 255, 255]), Rgb([0, 2, 0])));
+            let filtered_bg = set_bg_colour.filter(frame);
 
-        let set_bg_colour = ImageShader::new(ColourMapper::new(Rgb([255, 255, 255]), Rgb([0, 2, 0])));
-        let filtered_bg = set_bg_colour.filter(frame);
-        frames.push(filtered_bg);
-    }
-
-    let rgba_frames = frames
-        .iter() 
-        .map(|frame| Frame::new(frame.clone().into_rgba8()))
+            Frame::new(filtered_bg.into_rgba8())
+        })
         .collect::<Vec<_>>();
 
+
     let file_out = File::create("out.gif")?;
-    let mut encoder = GifEncoder::new(file_out);
-    encoder.encode_frames(rgba_frames)?;
+    let mut encoder = GifEncoder::new_with_speed(file_out, 30);
     encoder.set_repeat(Repeat::Infinite)?;
+    encoder.encode_frames(frames)?;
 
     Ok(())
 }
