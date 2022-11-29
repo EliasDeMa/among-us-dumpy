@@ -1,10 +1,10 @@
 use std::{env, error::Error, fs::File};
 
 use image::{
-    gif::{GifEncoder, Repeat},
+    codecs::gif::{GifEncoder, Repeat},
     imageops::{overlay, resize, FilterType},
     io::Reader,
-    DynamicImage, Frame, GenericImageView, Pixel, Primitive, Rgb, RgbImage,
+    DynamicImage, Frame, Pixel, Primitive, Rgb, RgbImage,
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -42,15 +42,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .decode()
                         .unwrap();
 
-                    let indexed_pixel_rgba = img.get_pixel(x, y); 
+                    let indexed_pixel_rgba = img.get_pixel(x, y);
                     let mut indexed_pixel = indexed_pixel_rgba.to_rgb();
                     if indexed_pixel.0 == [255, 255, 255] {
                         indexed_pixel = Rgb([254, 254, 254]);
                     }
 
                     let pixel = shader(pixel_i, indexed_pixel);
-                    overlay(&mut frame, &pixel, (x * 74) + pad, (y * 63) + pad);
-                
+                    overlay(&mut frame, &pixel, ((x * 74) + pad).into(), ((y * 63) + pad).into());
 
                     count += 1;
                     if count == 6 {
